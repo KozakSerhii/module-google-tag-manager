@@ -6,6 +6,7 @@
  */
 -->
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <preference for="Magefan\GoogleTagManager\Api\DataLayer\SessionDataLayerInterface" type="Magefan\GoogleTagManager\Model\DataLayer\Session" />
     <preference for="Magefan\GoogleTagManager\Api\DataLayer\BeginCheckoutInterface" type="Magefan\GoogleTagManager\Model\DataLayer\BeginCheckout" />
     <preference for="Magefan\GoogleTagManager\Api\DataLayer\PurchaseInterface" type="Magefan\GoogleTagManager\Model\DataLayer\Purchase" />
     <preference for="Magefan\GoogleTagManager\Api\DataLayer\ViewCartInterface" type="Magefan\GoogleTagManager\Model\DataLayer\ViewCart" />

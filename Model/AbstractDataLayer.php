@@ -17,6 +17,8 @@ use Magento\Store\Model\StoreManagerInterface;
 use Magento\Framework\App\RequestInterface;
 use Magento\Framework\Registry;
 use Magento\Framework\App\ObjectManager;
+use Magento\Customer\Model\Session;
+use Magento\Customer\Model\ResourceModel\GroupRepository;
 
 class AbstractDataLayer
 {
@@ -46,6 +48,21 @@ class AbstractDataLayer
     protected $registry;
 
     /**
+     * @var Session
+     */
+    protected $session;
+
+    /**
+     * @var GroupRepository
+     */
+    protected $groupRepository;
+
+    /**
+     * @var string
+     */
+    protected $customerGroupCode;
+
+    /**
      * AbstractDataLayer constructor.
      *
      * @param Config $config
@@ -57,7 +74,9 @@ class AbstractDataLayer
         StoreManagerInterface $storeManager,
         CategoryRepositoryInterface $categoryRepository,
         RequestInterface $request = null,
-        Registry $registry = null
+        Registry $registry = null,
+        Session $session = null,
+        GroupRepository $groupRepository = null
     ) {
         $this->config = $config;
         $this->storeManager = $storeManager;
@@ -67,6 +86,12 @@ class AbstractDataLayer
         );
         $this->registry = $registry ?: ObjectManager::getInstance()->get(
             Registry::class
+        );
+        $this->session = $session ?: ObjectManager::getInstance()->get(
+            Session::class
+        );
+        $this->groupRepository = $groupRepository ?: ObjectManager::getInstance()->get(
+            GroupRepository::class
         );
     }
 
@@ -192,14 +217,86 @@ class AbstractDataLayer
     {
         if ($attributeCode) {
             $result = $product->getData($attributeCode);
-            if (is_numeric($result) && 'sku' != $attributeCode) {
+            if (is_numeric($result) && !in_array($attributeCode, ['sku', 'entity_id'])) {
                 $result = $product->getResource()->getAttribute($attributeCode)->getFrontend()->getValue($product);
             }
+
+            if (is_array($result)) {
+                $result = implode(', ', $result);
+            }
+
             if ($result) {
                 return (string)$result;
             }
         }
 
         return '';
+    }
+
+    /**
+     * @return string
+     * @throws NoSuchEntityException
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
+    protected function getCustomerGroupCode(): string
+    {
+        if (null === $this->customerGroupCode) {
+            $this->customerGroupCode = 'Guest';
+            $customerGroupId = $this->session->getCustomerGroupId();
+            if ($customerGroupId) {
+                try {
+                    $group = $this->groupRepository->getById($customerGroupId);
+                    $this->customerGroupCode = (string)$group->getCode();
+                } catch (NoSuchEntityException $e) {
+                    /* Do nothing */
+                }
+            }
+        }
+
+        return $this->customerGroupCode;
+    }
+
+    /**
+     * @param array $data
+     * @return array
+     */
+    protected function eventWrap(array $data): array
+    {
+        if (empty($data)) {
+            return $data;
+        }
+
+        $data = $this->addCustomerGroup($data);
+        $data = $this->addMfUniqueEventId($data);
+
+        return $data;
+    }
+
+    /**
+     * @param array $data
+     * @return array
+     */
+    protected function addCustomerGroup(array $data): array
+    {
+        if (!isset($data['customerGroup'])) {
+            $data['customerGroup'] = $this->getCustomerGroupCode();
+        }
+        return $data;
+    }
+
+    /**
+     * @param array $data
+     * @return array
+     */
+    protected function addMfUniqueEventId(array $data): array
+    {
+
+        $hash = md5(json_encode($data) . microtime());
+        $event = isset($data['event']) ? $data['event'] : 'event';
+        $eventId = $event . '_' . $hash;
+
+        $data['magefanUniqueEventId'] = $eventId;
+
+        return $data;
     }
 }
